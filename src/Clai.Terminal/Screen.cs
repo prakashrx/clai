@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace Clai.Terminal;
 
 /// <summary>
@@ -6,7 +8,7 @@ namespace Clai.Terminal;
 public class Screen
 {
     private readonly TerminalCell[,] buffer;
-    private readonly List<TerminalCell[]> scrollback;
+    private readonly List<string> historyLines;
     private readonly AnsiParser parser;
     private readonly int width;
     private readonly int height;
@@ -16,24 +18,76 @@ public class Screen
     private int savedCursorX;
     private int savedCursorY;
     private TerminalCell currentAttributes;
+    private bool isAlternateScreen;
+    private TerminalCell[,]? alternateBuffer;
     
     public int Width => width;
     public int Height => height;
     public int CursorX => cursorX;
     public int CursorY => cursorY;
-    public IReadOnlyList<TerminalCell[]> Scrollback => scrollback.AsReadOnly();
+    public bool IsAlternateScreen => isAlternateScreen;
+    
+    /// <summary>
+    /// Get all lines as plain text (for AI consumption)
+    /// </summary>
+    public IReadOnlyList<string> Lines
+    {
+        get
+        {
+            var lines = new List<string>();
+            
+            // Add history lines
+            lines.AddRange(historyLines);
+            
+            // Add current buffer lines
+            for (int y = 0; y < height; y++)
+            {
+                var line = GetLineText(y);
+                if (!string.IsNullOrWhiteSpace(line) || y < cursorY)
+                    lines.Add(line);
+            }
+            
+            return lines;
+        }
+    }
+    
+    /// <summary>
+    /// Get all text as a single string
+    /// </summary>
+    public string Text => string.Join(Environment.NewLine, Lines);
+    
+    /// <summary>
+    /// Get just the visible screen text (current buffer)
+    /// </summary>
+    public string VisibleText
+    {
+        get
+        {
+            var lines = new List<string>();
+            for (int y = 0; y < height; y++)
+            {
+                lines.Add(GetLineText(y));
+            }
+            
+            // Trim trailing empty lines
+            while (lines.Count > 0 && string.IsNullOrWhiteSpace(lines[lines.Count - 1]))
+                lines.RemoveAt(lines.Count - 1);
+                
+            return string.Join(Environment.NewLine, lines);
+        }
+    }
     
     /// <summary>
     /// Fired when the terminal display is updated
     /// </summary>
     public event Action<TerminalUpdate>? Updated;
     
-    public Screen(int width = 80, int height = 24, int scrollbackSize = 1000)
+    public Screen(int width = 80, int height = 24, int maxHistory = 1000)
     {
         this.width = width;
         this.height = height;
         buffer = new TerminalCell[height, width];
-        scrollback = new List<TerminalCell[]>(scrollbackSize);
+        historyLines = new List<string>(maxHistory);
         parser = new AnsiParser(this);
         currentAttributes = TerminalCell.Empty;
         Clear();
@@ -52,7 +106,7 @@ public class Screen
     /// </summary>
     public void Write(string text)
     {
-        Write(System.Text.Encoding.UTF8.GetBytes(text));
+        Write(Encoding.UTF8.GetBytes(text));
     }
     
     /// <summary>
@@ -60,21 +114,26 @@ public class Screen
     /// </summary>
     public TerminalCell[,] GetScreen()
     {
+        if (isAlternateScreen && alternateBuffer != null)
+            return (TerminalCell[,])alternateBuffer.Clone();
         return (TerminalCell[,])buffer.Clone();
     }
     
     /// <summary>
-    /// Get a specific line from the buffer
+    /// Get text for a specific line
     /// </summary>
-    public TerminalCell[] GetLine(int line)
+    private string GetLineText(int y)
     {
-        if (line < 0 || line >= height)
-            throw new ArgumentOutOfRangeException(nameof(line));
-            
-        var result = new TerminalCell[width];
+        var sb = new StringBuilder();
+        var currentBuffer = isAlternateScreen && alternateBuffer != null ? alternateBuffer : buffer;
+        
         for (int x = 0; x < width; x++)
-            result[x] = buffer[line, x];
-        return result;
+        {
+            var c = currentBuffer[y, x].Char;
+            sb.Append(c == '\0' ? ' ' : c);
+        }
+        
+        return sb.ToString().TrimEnd();
     }
     
     /// <summary>
@@ -82,9 +141,11 @@ public class Screen
     /// </summary>
     public void Clear()
     {
+        var currentBuffer = isAlternateScreen && alternateBuffer != null ? alternateBuffer : buffer;
+        
         for (int y = 0; y < height; y++)
             for (int x = 0; x < width; x++)
-                buffer[y, x] = TerminalCell.Empty;
+                currentBuffer[y, x] = TerminalCell.Empty;
         
         cursorX = 0;
         cursorY = 0;
@@ -96,14 +157,16 @@ public class Screen
     /// </summary>
     public void ClearFromCursor()
     {
+        var currentBuffer = isAlternateScreen && alternateBuffer != null ? alternateBuffer : buffer;
+        
         // Clear rest of current line
         for (int x = cursorX; x < width; x++)
-            buffer[cursorY, x] = TerminalCell.Empty;
+            currentBuffer[cursorY, x] = TerminalCell.Empty;
             
         // Clear all lines below
         for (int y = cursorY + 1; y < height; y++)
             for (int x = 0; x < width; x++)
-                buffer[y, x] = TerminalCell.Empty;
+                currentBuffer[y, x] = TerminalCell.Empty;
                 
         OnUpdated(TerminalUpdateType.ContentChanged);
     }
@@ -113,8 +176,11 @@ public class Screen
     /// </summary>
     public void ClearLine()
     {
+        var currentBuffer = isAlternateScreen && alternateBuffer != null ? alternateBuffer : buffer;
+        
         for (int x = 0; x < width; x++)
-            buffer[cursorY, x] = TerminalCell.Empty;
+            currentBuffer[cursorY, x] = TerminalCell.Empty;
+            
         OnUpdated(TerminalUpdateType.ContentChanged);
     }
     
@@ -123,8 +189,11 @@ public class Screen
     /// </summary>
     public void ClearToCursor()
     {
+        var currentBuffer = isAlternateScreen && alternateBuffer != null ? alternateBuffer : buffer;
+        
         for (int x = 0; x <= cursorX && x < width; x++)
-            buffer[cursorY, x] = TerminalCell.Empty;
+            currentBuffer[cursorY, x] = TerminalCell.Empty;
+            
         OnUpdated(TerminalUpdateType.ContentChanged);
     }
     
@@ -133,6 +202,8 @@ public class Screen
     /// </summary>
     internal void PutChar(char c)
     {
+        var currentBuffer = isAlternateScreen && alternateBuffer != null ? alternateBuffer : buffer;
+        
         switch (c)
         {
             case '\r':  // Carriage return
@@ -152,15 +223,6 @@ public class Screen
                 cursorX = Math.Min(((cursorX / 8) + 1) * 8, width - 1);
                 break;
                 
-            case '\x7F':  // DEL
-                // Handle delete
-                if (cursorX > 0)
-                {
-                    cursorX--;
-                    buffer[cursorY, cursorX] = TerminalCell.Empty;
-                }
-                break;
-                
             default:
                 if (c >= 32)  // Printable character
                 {
@@ -172,7 +234,7 @@ public class Screen
                     
                     var cell = currentAttributes;
                     cell.Char = c;
-                    buffer[cursorY, cursorX] = cell;
+                    currentBuffer[cursorY, cursorX] = cell;
                     cursorX++;
                 }
                 break;
@@ -199,21 +261,32 @@ public class Screen
     /// </summary>
     internal void ScrollUp()
     {
-        // Save the top line to scrollback
-        var topLine = new TerminalCell[width];
-        for (int x = 0; x < width; x++)
-            topLine[x] = buffer[0, x];
-        scrollback.Add(topLine);
-        
-        // Move all lines up
-        for (int y = 0; y < height - 1; y++)
+        if (isAlternateScreen && alternateBuffer != null)
+        {
+            // In alternate screen, just shift content up
+            for (int y = 0; y < height - 1; y++)
+                for (int x = 0; x < width; x++)
+                    alternateBuffer[y, x] = alternateBuffer[y + 1, x];
+                    
+            // Clear bottom line
             for (int x = 0; x < width; x++)
-                buffer[y, x] = buffer[y + 1, x];
-                
-        // Clear the bottom line
-        for (int x = 0; x < width; x++)
-            buffer[height - 1, x] = TerminalCell.Empty;
+                alternateBuffer[height - 1, x] = TerminalCell.Empty;
+        }
+        else
+        {
+            // Save top line to history
+            historyLines.Add(GetLineText(0));
             
+            // Move all lines up
+            for (int y = 0; y < height - 1; y++)
+                for (int x = 0; x < width; x++)
+                    buffer[y, x] = buffer[y + 1, x];
+                    
+            // Clear the bottom line
+            for (int x = 0; x < width; x++)
+                buffer[height - 1, x] = TerminalCell.Empty;
+        }
+        
         OnUpdated(TerminalUpdateType.Scrolled);
     }
     
@@ -268,6 +341,32 @@ public class Screen
     internal void ResetAttributes()
     {
         currentAttributes = TerminalCell.Empty;
+    }
+    
+    /// <summary>
+    /// Enter alternate screen buffer (for vim, htop, etc)
+    /// </summary>
+    internal void EnterAlternateScreen()
+    {
+        if (!isAlternateScreen)
+        {
+            alternateBuffer = new TerminalCell[height, width];
+            isAlternateScreen = true;
+            Clear();
+        }
+    }
+    
+    /// <summary>
+    /// Exit alternate screen buffer
+    /// </summary>
+    internal void ExitAlternateScreen()
+    {
+        if (isAlternateScreen)
+        {
+            isAlternateScreen = false;
+            alternateBuffer = null;
+            OnUpdated(TerminalUpdateType.ContentChanged);
+        }
     }
     
     private void OnUpdated(TerminalUpdateType type)

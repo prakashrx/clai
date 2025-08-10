@@ -218,7 +218,13 @@ internal class AnsiParser
                 {
                     // ESC[?25h - Show cursor (DECTCEM)
                     Debug.WriteLine("[ANSI] Show cursor");
-                    // TODO: Implement cursor visibility tracking if needed
+                    // TODO: Track cursor visibility if needed
+                }
+                else if (parameters.StartsWith("?1049"))
+                {
+                    // ESC[?1049h - Enable alternate screen buffer (used by vim, htop, etc)
+                    Debug.WriteLine("[ANSI] Enter alternate screen");
+                    // TODO: Implement alternate screen in Screen class
                 }
                 // Add other modes as needed
                 break;
@@ -228,7 +234,13 @@ internal class AnsiParser
                 {
                     // ESC[?25l - Hide cursor (DECTCEM) 
                     Debug.WriteLine("[ANSI] Hide cursor");
-                    // TODO: Implement cursor visibility tracking if needed
+                    // TODO: Track cursor visibility if needed
+                }
+                else if (parameters.StartsWith("?1049"))
+                {
+                    // ESC[?1049l - Disable alternate screen buffer
+                    Debug.WriteLine("[ANSI] Exit alternate screen");
+                    // TODO: Implement alternate screen in Screen class
                 }
                 // Add other modes as needed
                 break;

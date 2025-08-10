@@ -108,3 +108,4 @@ $ gzip file2.log
 - **PowerShell colors working**: ESC[93m (yellow), ESC[38;5;9m (red) properly handled
 - **Cursor "flickering"**: Actually PSReadLine redrawing entire line with syntax highlighting - expected behavior
 - **Clean history important**: Regular commands go to history, full-screen apps use alternate buffer
+- Do not run. just build

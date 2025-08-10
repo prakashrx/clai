@@ -214,7 +214,7 @@ public class Terminal : IDisposable
                 
                 if (bytesRead > 0)
                 {
-                    // Feed raw bytes to screen for processing
+                    // Get raw bytes
                     var data = new byte[bytesRead];
                     Array.Copy(buffer, data, bytesRead);
                     
@@ -223,7 +223,9 @@ public class Terminal : IDisposable
                     var escaped = str.Replace("\x1B", "\\x1B").Replace("\r", "\\r").Replace("\n", "\\n");
                     Debug.WriteLine($"[OUTPUT] {bytesRead} bytes: \"{escaped}\"");
                     
+                    // Parse ANSI sequences and update screen buffer
                     screen.Write(data);
+                    // Rendering will be handled by the demo/app layer
                 }
                 else
                 {
