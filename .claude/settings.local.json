@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ren:*)",
+      "Bash(move VirtualTerminal.cs Screen.cs)",
+      "Bash(mv:*)"
+    ],
+    "deny": []
+  }
+}
