@@ -133,9 +133,15 @@ venv/
 appsettings.Development.json
 appsettings.Local.json
 
-# Reference repos - exclude entirely for now
-# These are external repos we're studying
-reference/
+# Reference repos - exclude external repos but keep our first implementation
+# External repos we're studying (like terminal, etc)
+reference/terminal/
+reference/aider/
+reference/libvt100/
+reference/PocketFlow/
+reference/spectre.console/
+# Keep our first implementation for reference
+!reference/first-impl/
 
 # AI/LLM related
 .env
