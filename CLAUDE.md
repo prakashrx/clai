@@ -81,43 +81,61 @@ See `/docs/Virtual_Terminal_Architecture.md` for detailed design.
 - `/reference/terminal/` - Windows Terminal reference code
 - Always build and make sure there are no errors/warnings. I will run it myself
 
-## Status
+## Status - V2 Implementation (Event Streaming Architecture)
 
-### ✅ Completed (Clai.Terminal Library)
-- **ConPTY Integration**: Full Windows Pseudo Console support
-- **Process Management**: Start/stop processes, handle I/O  
-- **ANSI/VT100 Parser**: Colors, cursor movement, clearing, ESC[?25h/l recognition
-- **Screen Buffer**: 2D cell array with attributes
-- **Basic Scrollback**: Lines saved when scrolling up (currently called `Scrollback`, should rename to `History`)
-- **Color Support**: Full 16 colors + extended 256-color format (ESC[38;5;n)
-- **Cursor Tracking**: Position, save/restore (ESC[s/u, ESC7/8)
-- **Demo Application**: Interactive terminal with PowerShell testing
-- **Debug Output**: Debug.WriteLine for input/output analysis
+### ✅ Completed
+- **ConPTY Integration**: Full Windows Pseudo Console support with persistent shell
+- **Event Streaming**: IAsyncEnumerable + Channel<T> for proper async event flow
+- **ANSI Parser with State Machine**: 
+  - Proper OSC sequence handling (terminates on BEL, not letters)
+  - CSI sequences (cursor, colors, clearing)
+  - Distinct states for different escape types
+- **Event Types**: Rich event model (TextWritten, CursorMoved, Clear, Prompt, etc.)
+- **Process Management**: Persistent cmd.exe with proper stream handling
+- **Demo Application**: Event streaming proof-of-concept
+
+### 🎯 Current Architecture Decisions
+
+#### Event-Driven, No Screen Buffer Required
+After analysis, we've determined that a traditional Screen buffer class is **not needed**:
+- **VirtualTerminal is sufficient**: Each command runs in its own VirtualTerminal viewport
+- **Events ARE the history**: The event stream itself provides complete history
+- **AI observes VirtualTerminals**: Each VirtualTerminal is an isolated, observable unit
+- **CLAI conversation = sequence of VirtualTerminals**: Natural chronological history
+
+#### VirtualTerminal Design
+- Each command execution creates a VirtualTerminal
+- Handles both simple commands AND interactive programs (vim, htop)
+- Interactive programs update within their viewport (contained chaos)
+- Coordinate translation keeps output isolated
+- Event stream provides natural boundaries (command start → output → completion)
 
 ### 🚧 To Implement Next
-- **Viewport Navigation**: Clean API for scrolling through history
-  - `ScrollUp()/ScrollDown()` methods
-  - `GetViewport()` to render from any position
-  - Page Up/Down key handling
-- **Plain Text Extraction**: For AI observation
-  - `GetVisibleText()` - current screen
-  - `GetHistoryText()` - scrollback content  
-  - `GetAllText()` - everything
-- **Alternate Screen Buffer**: ESC[?1049h/l for vim/htop
-  - Separate buffer for full-screen apps
-  - Prevent history pollution from TUI redraws
+1. **VirtualTerminal Class**: 
+   - Consume events from PseudoConsole
+   - Translate coordinates to viewport
+   - Handle isolation for each command
+   - Support interactive programs within viewport
 
-### 📋 Future Plans
-- **Event Stream**: Unified chronological event log (as per ConPTY_Integration_Design.md)
-- **AI Observer**: Snapshot and context extraction service
-- **Mode Switching**: AI vs Manual mode routing in main app
-- **Session Persistence**: Save/restore terminal state
-- **Main CLAI Integration**: Connect terminal library to Spectre.Console UI
+2. **Integration with Main App**:
+   - Wire up VirtualTerminals to Spectre.Console display
+   - Show command outputs in isolated boxes
+   - Maintain conversation history (list of VirtualTerminals)
 
-### 🔍 Notes & Observations
-- **NOT using Terminal.Gui** - Main app uses Spectre.Console, terminal library is standalone
-- **Scrollbars**: Windows Terminal feature, not ConPTY - we'll need status bar indicators
-- **PowerShell colors working**: ESC[93m (yellow), ESC[38;5;9m (red) properly handled
-- **Cursor "flickering"**: Actually PSReadLine redrawing entire line with syntax highlighting - expected behavior
-- **Clean history important**: Regular commands go to history, full-screen apps use alternate buffer
-- Do not run. just build
+3. **AI Observation**:
+   - AI observes VirtualTerminal event streams
+   - Can query "what's in terminal N?"
+   - Can review conversation history
+
+### 📋 Future Enhancements
+- **Multiple Terminal Sessions**: Like tmux - multiple independent shells
+- **Session Persistence**: Save/restore conversation with all VirtualTerminals
+- **Rich Copy/Paste**: Select text from any VirtualTerminal in history
+- **Smart Summarization**: Compress interactive program sessions for AI context
+
+### 🔍 Key Insights
+- **No Screen class needed**: VirtualTerminals + events provide everything
+- **Simpler than traditional terminals**: Each command naturally isolated
+- **Full observability**: AI sees everything through event streams
+- **Interactive programs work**: They just update within their VirtualTerminal viewport
+- **History is automatic**: The conversation IS the history

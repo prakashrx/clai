@@ -39,23 +39,23 @@ CLAI Display:
 3. **Isolation**: Each command's output is contained in its own virtual space
 4. **Full Support**: Interactive programs work perfectly (vim, htop, etc.)
 
-## Event Stream Architecture
+## Event Stream Architecture (Refined)
 
 ### Event Flow
 
 ```
 ConPTY (raw bytes)
     ↓
-AnsiParser (tokenizes ANSI sequences)
+AnsiParser (tokenizes ANSI sequences with proper state machine)
     ↓
-Screen (maintains terminal state)
+EventStream (Channel<TerminalEvent>)
     ↓
-EventStream (emits granular events)
+VirtualTerminal (consumes events, translates coordinates)
     ↓
-VirtualTerminal (translates coordinates)
-    ↓
-Renderer (displays to user)
+Renderer (displays to user via Spectre.Console)
 ```
+
+**Key Insight**: We don't need a Screen buffer class. The VirtualTerminal itself maintains any necessary state by consuming events. The event stream IS the history.
 
 ### Event Types
 
