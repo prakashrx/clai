@@ -1,59 +1,44 @@
-using Microsoft.Win32.SafeHandles;
 using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
 
 namespace Clai.Terminal.Native;
 
 /// <summary>
-/// P/Invoke signatures for Windows Pseudo Console API
+/// P/Invoke declarations for Windows ConPTY API
 /// </summary>
 internal static class ConPtyApi
 {
-    internal const uint PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE = 0x00020016;
-    internal const uint PSEUDOCONSOLE_INHERIT_CURSOR = 0x1;
-
-    [StructLayout(LayoutKind.Sequential)]
-    internal struct COORD
-    {
-        public short X;
-        public short Y;
-
-        public COORD(short x, short y)
-        {
-            X = x;
-            Y = y;
-        }
-    }
-
-    [DllImport("kernel32.dll", SetLastError = true)]
+    private const string Kernel32 = "kernel32.dll";
+    
+    [DllImport(Kernel32, SetLastError = true)]
     internal static extern int CreatePseudoConsole(
         COORD size,
         SafeFileHandle hInput,
         SafeFileHandle hOutput,
         uint dwFlags,
         out IntPtr phPC);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
+    
+    [DllImport(Kernel32, SetLastError = true)]
     internal static extern int ResizePseudoConsole(IntPtr hPC, COORD size);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    internal static extern int ClosePseudoConsole(IntPtr hPC);
-
-    [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    
+    [DllImport(Kernel32, SetLastError = true)]
+    internal static extern void ClosePseudoConsole(IntPtr hPC);
+    
+    [DllImport(Kernel32, SetLastError = true)]
     internal static extern bool CreatePipe(
         out SafeFileHandle hReadPipe,
         out SafeFileHandle hWritePipe,
         IntPtr lpPipeAttributes,
-        int nSize);
-
-    // Thread attribute list functions (needed to attach process to ConPTY)
-    [DllImport("kernel32.dll", SetLastError = true)]
+        uint nSize);
+    
+    [DllImport(Kernel32, SetLastError = true)]
     internal static extern bool InitializeProcThreadAttributeList(
         IntPtr lpAttributeList,
         int dwAttributeCount,
         int dwFlags,
         ref IntPtr lpSize);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
+    
+    [DllImport(Kernel32, SetLastError = true)]
     internal static extern bool UpdateProcThreadAttribute(
         IntPtr lpAttributeList,
         uint dwFlags,
@@ -62,7 +47,22 @@ internal static class ConPtyApi
         IntPtr cbSize,
         IntPtr lpPreviousValue,
         IntPtr lpReturnSize);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    internal static extern bool DeleteProcThreadAttributeList(IntPtr lpAttributeList);
+    
+    [DllImport(Kernel32, SetLastError = true)]
+    internal static extern void DeleteProcThreadAttributeList(IntPtr lpAttributeList);
+    
+    internal const uint PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE = 0x00020016;
+    
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct COORD
+    {
+        public short X;
+        public short Y;
+        
+        public COORD(short x, short y)
+        {
+            X = x;
+            Y = y;
+        }
+    }
 }

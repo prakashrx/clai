@@ -42,18 +42,30 @@ $ gzip file2.log
 [AI thinking: Stopping compression, showing file list...]
 ```
 
-## Current Status
-- Clai.Terminal library implemented with ConPTY integration
-- ANSI/VT100 parser working with PowerShell
-- Basic demo app for testing terminal functionality
-- Documentation updated to reflect actual architecture
+## Current Status - Major Architecture Revision (2025-08-11)
 
-## Next Steps
-1. Add viewport navigation and plain text extraction to Screen class
-2. Implement alternate screen buffer for full-screen apps
-3. Add AI service layer with natural language processing
-4. Build context management and session persistence
-5. Integrate terminal library with main CLAI app
+### 🔄 Why We're Starting Fresh
+After implementing the first version with terminal integration, we discovered fundamental issues:
+1. **Output Isolation Problem**: Cannot cleanly separate command output from shell prompts
+2. **Blocking Architecture**: Must wait for command completion before showing output
+3. **No Real Streaming**: Output appears all at once instead of progressively
+4. **Interactive Programs**: Can't properly handle vim, htop, or other TUI applications
+
+### 🎯 New Approach: Virtual Terminal Architecture
+We're rebuilding with proper event-streaming architecture:
+- **Event Streaming**: Granular events flow from terminal to consumers
+- **Virtual Terminal**: Each command gets its own viewport with coordinate translation
+- **Real-time Display**: Output streams as it arrives
+- **Full Compatibility**: vim, htop, and all terminal programs work perfectly
+
+See `/docs/Virtual_Terminal_Architecture.md` for detailed design.
+
+## Next Steps (V2 Implementation)
+1. Move first implementation to `/reference/first-impl/`
+2. Create new `/src` with Virtual Terminal architecture
+3. Implement proper event streaming with IAsyncEnumerable
+4. Build VirtualTerminal class for coordinate translation
+5. Integrate streaming with CLAI command processor
 
 ## Code Style Principles
 - **Simple over clever** - Readable code beats clever one-liners

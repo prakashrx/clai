@@ -1,34 +1,73 @@
-using Clai.Commands;
-using Clai.Core;
-using Clai.IO;
+using Clai.Terminal;
+using Clai.Terminal.Events;
+using Spectre.Console;
 
-// Set up cancellation for graceful shutdown
-using var cts = new CancellationTokenSource();
-Console.CancelKeyPress += (s, e) =>
+AnsiConsole.MarkupLine("[bold cyan]CLAI - Command Line AI[/]");
+AnsiConsole.MarkupLine("[dim]Event Streaming Terminal - Proof of Concept[/]");
+AnsiConsole.WriteLine();
+
+// Create pseudo console
+using var pty = PseudoConsole.Create(columns: 120, rows: 30);
+
+// Start the shell
+pty.StartProcess();
+
+// Give shell time to initialize
+await Task.Delay(500);
+
+// Task to read and display events
+var eventTask = Task.Run(async () =>
 {
-    e.Cancel = true;
-    cts.Cancel();
-};
+    await foreach (var evt in pty.Events.ReadAllAsync())
+    {
+        switch (evt)
+        {
+            case TextWrittenEvent text:
+                // Show text with cursor position for debugging
+                AnsiConsole.MarkupLine($"[dim green]TEXT[/] @({text.CursorX},{text.CursorY}): {Markup.Escape(text.Text)}");
+                break;
 
-// Set up dependencies
-var context = new SessionContext();
-var inputHandler = new SpectreInputHandler(context);
-var outputRenderer = new SpectreOutputRenderer();
-var commandProcessor = new CommandProcessor(context);
+            case NewLineEvent:
+                AnsiConsole.MarkupLine("[dim yellow]NEWLINE[/]");
+                break;
 
-// Create and run the REPL
-var repl = new ReplEngine(inputHandler, commandProcessor, outputRenderer);
+            case CursorMovedEvent cursor:
+                AnsiConsole.MarkupLine($"[dim blue]CURSOR:[/] ({cursor.X}, {cursor.Y})");
+                break;
 
-try
+            case ClearScreenEvent:
+                AnsiConsole.MarkupLine("[dim red]CLEAR SCREEN[/]");
+                break;
+
+            case PromptDetectedEvent prompt:
+                AnsiConsole.MarkupLine($"[bold yellow]PROMPT:[/] {Markup.Escape(prompt.PromptText)}");
+                break;
+
+            case CommandCompletedEvent completed:
+                AnsiConsole.MarkupLine($"[bold green]COMMAND COMPLETED[/] Exit Code: {completed.ExitCode}");
+                return; // Exit the event loop
+
+            default:
+                AnsiConsole.MarkupLine($"[dim]Event:[/] {evt.GetType().Name}");
+                break;
+        }
+    }
+});
+
+// Send a test command
+await Task.Delay(1000);
+AnsiConsole.MarkupLine("[bold]Sending command: echo Hello World[/]");
+await pty.WriteLineAsync("dir");
+
+// Wait for events to process
+await Task.WhenAny(eventTask, Task.Delay(3000));
+
+// Send exit command to cleanly close (only if still running)
+if (pty.IsRunning)
 {
-    await repl.RunAsync(cts.Token);
+    await pty.WriteLineAsync("exit");
+    await Task.Delay(500); // Give it time to exit cleanly
 }
-catch (OperationCanceledException)
-{
-    // Expected when user cancels
-    outputRenderer.ShowGoodbye();
-}
-catch (Exception ex)
-{
-    outputRenderer.ShowError($"Unexpected error: {ex.Message}");
-}
+
+AnsiConsole.WriteLine();
+AnsiConsole.MarkupLine("[green]Test completed![/]");
